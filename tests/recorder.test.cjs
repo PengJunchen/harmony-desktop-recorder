@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const devEco = process.env.RECORDER_DEVECO || '/Applications/DevEco-Studio.app/Contents';
-const ts = require(path.join(devEco, 'tools/hvigor/hvigor/node_modules/typescript'));
+const ts = require(process.env.RECORDER_TYPESCRIPT_DIR || path.join(devEco, 'tools/hvigor/hvigor/node_modules/typescript'));
 const sourceDirectory = path.join(__dirname, '../entry/src/main/ets/recording');
 
 function load(name, mocks = {}) {

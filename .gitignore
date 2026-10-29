@@ -13,3 +13,11 @@ artifacts/
 .DS_Store
 __pycache__/
 *.pyc
+.signing-verification/
+reports/
+test-results/
+coverage/
+VALIDATION.md
+VERIFICATION.md
+TEST_REPORT*.md
+*.junit.xml

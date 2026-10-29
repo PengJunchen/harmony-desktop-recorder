@@ -1,88 +1,220 @@
-# 清录 · OpenHarmony 桌面录屏
+# 清录 · 鸿蒙电脑桌面录屏
 
-独立的原生 ArkTS / Stage 应用，包名 `com.personal.desktoprecorder`，不依赖当前工作区的项目。当前设备版面向用户提供的 API 24 / 2in1 电脑。
+清录是面向鸿蒙电脑的原生 ArkTS / Stage 应用，支持录制整个桌面，并将视频保存在本机。
 
-## 第一版功能
+- 应用包名：`com.personal.desktoprecorder`
+- 当前版本：`0.1.2`
+- 目标设备：`2in1` 电脑，API 24 / `6.1.1(24)` 及以上
+- 输出格式：MP4，H.264 视频与 AAC 音频
 
-- 调用系统 `AVScreenCaptureRecorder` 采集整个桌面，H.264 + AAC / MP4。
-- 原屏像素、长边最高 2560 / 1920 三档，保留原比例、不放大低分辨率屏幕，编码尺寸对齐到偶数。
-- 标准 / 高码率，8–20 / 8–30 Mbps，根据输出像素数计算，使用目标设备实际通过初始化的范围。
-- 独立的视频码率选择：自动匹配、2/4/8/12/20/30 Mbps 预设，或自定义 1–30 Mbps（最多两位小数）；手动码率不改变所选分辨率。
-- 码率滑杆与数值输入同步，提供每分钟体积参考；低码率通常减少文件体积，也会损失细节。实际编码体积随画面内容变化，参考值不代表固定文件大小。
-- 系统声音由录屏服务管理，可选麦克风讲解，按需申请麦克风权限。
-- 计时、停止并保存、录制列表、应用内预览、系统文件选择器导出。
-- 系统授权取消、系统控制条停止、中断、媒体错误、重复点击的生命周期处理。
-- 保存前读取视频元数据，确认有视频宽高和正时长；未完整封装文件以 `.part.mp4` 保留，不误报成功。
+## 功能
+
+- 整屏录制；可选原分辨率、长边最高 2560 或 1920，保持原比例，不放大原画面。
+- 视频码率可选自动匹配、2 / 4 / 8 / 12 / 20 / 30 Mbps 预设，或自定义 1–30 Mbps，最多两位小数。
+- 自定义码率通过滑杆或数值输入调整，独立于分辨率，并显示每分钟体积参考。
+- 支持系统声音和可选麦克风讲解、计时、停止保存、录制列表、视频预览及导出。
+- 视频先保存在应用私有目录，停止后可导出到系统文件选择器指定的位置。
 - 不接入网络，不上传录制内容。
 
-## 环境与构建
+码率越低，文件通常越小，也可能损失运动画面与文字细节。例如，4 Mbps 的体积参考约 31.4 MB/分钟，2 Mbps 约 16.4 MB/分钟，已计入当前音轨码率，未计入容器开销。实际体积随画面内容变化，静止画面可能明显小于参考值。录制期间设置锁定，新设置从下一次录制开始生效。
 
-当前设备版 0.1.2，最低 API 24，对应 `6.1.1(24)`；本机使用 DevEco 内置 SDK 26.0.0.105、Hvigor 6.26.8、内置 Node 和 JBR 编译。业务录屏接口本身从 API 12 起可用，当前包的安装要求以 API 24 为准。模块仅声明 `2in1`，构建脚本检查此项，防止 IDE 同步将应用改为移动端兼容模式。
+## 开发环境
+
+本项目当前采用：
+
+| 项目 | 配置 |
+| --- | --- |
+| DevEco Studio | macOS 安装，包含 Node、JBR、Hvigor 与 SDK |
+| 编译 SDK | 26.0.0 |
+| 兼容 / 目标 SDK | `6.1.1(24)` |
+| Hvigor | 6.26.8 |
+| Python | Python 3 |
+| 模块设备类型 | 仅 `2in1` |
+
+默认 DevEco 路径为 `/Applications/DevEco-Studio.app/Contents`。安装在其它位置时，设置 `RECORDER_DEVECO`。构建脚本使用 DevEco 内置 Node 与 JBR，无需另外安装终端 Java。
+
+不要把模块设备类型改成 `tablet/default`。构建脚本会检查 `2in1` 声明，避免应用进入移动端兼容模式。
+
+## 克隆与本地构建
 
 ```sh
-bash scripts/test.sh
+git clone https://github.com/PengJunchen/harmony-desktop-recorder.git
+cd harmony-desktop-recorder
 bash scripts/build.sh
 ```
 
-脚本默认 DevEco 在 `/Applications/DevEco-Studio.app/Contents`，可设置 `RECORDER_DEVECO` 修改。
-设备版使用 DevEco 内置 SDK。首次在其它电脑打开时，在 DevEco Studio 配置 SDK；`local.properties` 不进入源码包。
+首次构建会把 `build-profile.template.json5` 复制为本机 `build-profile.json5`。模板不含签名配置。直接构建会得到未签名 HAP：
 
-构建输出：`entry/build/default/outputs/default/entry-default-unsigned.hap`。未签名 HAP 不能直接按普通签名应用安装。
-
-Git 仓库只跟踪不含签名信息的 `build-profile.template.json5`。构建脚本在配置缺失时复制为本机 `build-profile.json5`；自动签名生成的配置、密钥、设备资料和录制样本均被 Git 忽略。
-
-## 选择更小的视频体积
-
-在“录制设置 → 视频码率”中选择预设或“自定义”。例如，4 Mbps 的音视频体积参考约 31.4 MB/分钟，2 Mbps 约 16.4 MB/分钟。也可拖动滑杆，或直接输入 2.5、12.34 等数值。录制期间设置锁定，下次开始时应用新值。选择“自动匹配”恢复原有画质策略。
-
-上述为编码目标的体积参考，已计入当前音轨码率，未计入容器开销；画面静止时，实际视频可能明显小于参考值。原屏文字清晰度优先时，可以保留分辨率并先试 8 或 12 Mbps；对体积优先时，再降低码率或分辨率。
-
-当前真机拒绝标准 OpenHarmony 测试签名（`9568257: fail to verify pkcs7 file`）。请在 DevEco Studio 中打开此目录，进入“文件 → 项目结构 → 签名配置”，勾选“自动生成签名文件”和“使用 HarmonyOS 签名”，登录华为开发者账号，连接目标设备后为此包名生成调试 Profile。设备版本字符串虽为 OpenHarmony，不能据此推断它信任上游测试证书。
-
-仅当目标为信任 OpenHarmony 标准测试证书的其它开发系统时，可以运行下面的备用脚本；它不是当前设备的安装方案：
-
-```sh
-python3 scripts/sign-openharmony-test.py
+```text
+entry/build/default/outputs/default/entry-default-unsigned.hap
 ```
 
-输出 `artifacts/Qinglu-0.1.0-openharmony-test-signed.hap`，并调用官方工具验证签名。脚本仅使用 SDK 自带公开测试身份，不修改 SDK 模板、密钥或系统配置。此测试签名有效期 30 天，不代表华为 HarmonyOS、企业设备或其它发行版会信任它。正式安装应使用目标发行版认可的应用证书和匹配包名的 provision/profile。
+未签名 HAP 不能直接作为普通应用安装到目标电脑。完成下文的本机 debug 签名配置后，再次执行同一构建命令，会额外生成：
 
-## 安装与试录
+```text
+entry/build/default/outputs/default/entry-default-signed.hap
+```
 
-目标机器须开启并授权 HDC 调试。用本机 SDK 下的 `hdc`，多设备时务必指定目标：
+本机配置 `build-profile.json5` 已被 Git 忽略；仓库只跟踪无签名信息的模板。
+
+## 生成本机可用的 debug 签名
+
+### 1. 理解需要生成的材料
+
+可以在本机生成密钥对和 CSR，但华为设备认可的 debug 签名还需要开发者平台签发的调试证书与设备绑定 Profile。任意本地自签名证书、上游 OpenHarmony 公开测试证书，不能替代目标设备认可的调试证书。
+
+| 材料 | 用途 |
+| --- | --- |
+| `.p12` 密钥库 | 保存应用签名所需私钥；密码、别名必须与之匹配 |
+| `.csr` | 申请调试证书使用的证书请求文件 |
+| `.cer` 调试证书 | 开发者平台签发的公钥证书链 |
+| `.p7b` 调试 Profile | 绑定包名、调试证书、设备标识与有效期 |
+
+### 2. 连接目标电脑
+
+在目标电脑上开启开发者模式与调试，并在设备上允许连接。使用 DevEco 的设备管理连接 USB 或设备提供的无线调试地址。
 
 ```sh
+export RECORDER_DEVECO="/Applications/DevEco-Studio.app/Contents"
+export PATH="$RECORDER_DEVECO/sdk/default/openharmony/toolchains:$PATH"
 hdc list targets
-hdc -t <目标> shell param get const.ohos.fullname
-hdc -t <目标> shell param get const.ohos.apiversion
-hdc -t <目标> install entry/build/default/outputs/default/entry-default-signed.hap
-hdc -t <目标> shell aa start -a EntryAbility -b com.personal.desktoprecorder
 ```
 
-1. 打开清录，先选 1080p 和高码率。
-2. 点击开始，在系统弹窗确认录屏，选择整个屏幕。API 22+ 通过 `SCREEN_ONLY` 只展示屏幕；API 12–21 走主屏录制。
-3. 在桌面和其它应用之间切换，滚动文字页面、移动窗口并播放动态画面；有声音需求时播放允许录制的音频。
-4. 最小化清录，连续录制至少 5 分钟；返回停止，或使用系统控制条停止。
-5. 播放并导出 MP4；检查文件可播放、时长、实际像素尺寸、画面比例、音画同步和滚动流畅度。
-6. 复测麦克风允许/拒绝、系统授权取消、重复录制、系统停止和磁盘不足场景。
+从输出复制目标标识：
 
-## 当前边界
+```sh
+export RECORDER_TARGET="<hdc list targets 中的目标标识>"
+hdc -t "$RECORDER_TARGET" shell param get const.ohos.apiversion
+```
 
-- 已进行本地编译和模拟系统依赖的自动化测试。真实设备安装、系统授权、整桌面内容、实际编码帧率、声音和长时间后台录制须在目标设备验收。
-- 已实读目标系统为 `OpenHarmony-6.1.1.135 / API 24`，设备类型 `2in1`；系统具备接口不等于所有发行版都具备实际录屏能力。应用启动录制时检查系统能力与版本。
-- 使用系统编码器，帧率由系统管理，本版不提供 60 fps 或纯 CPU 编码承诺。
-- 主屏尺寸用于编码设置；第一版验收以主屏为准。其它显示器与主屏比例不同时，选择其它屏幕的适配需实测。
-- 受保护内容、隐私窗口与系统禁止采集的音频受操作系统限制；本应用不解除这些限制。
-- 支持停止后保留、预览和导出；本版没有暂停、剪辑、多屏拼接或全局快捷键。
-- 正常最小化不会主动停止录制；强制终止应用或关机会留下待检查的原始文件，无法保证 MP4 一定可修复。
-- 故障诊断保存在应用私有目录的 `recorder-diagnostics.jsonl`，只记录调用阶段、配置尺寸、码率与错误，不记录画面和声音。通过 `aa start ... --pb qingluValidateConfig true` 可仅检查初始化而不开始录屏；`qingluConfigVariant` 是开发诊断参数，不属于界面录制流程。
-- 录制先存在应用私有目录。卸载或清除应用数据会移除这些文件，请先导出重要视频。
-- 系统音频采集受应用与系统音频策略控制；本版没有独立的系统声音静音开关。
+SSH 服务端口与 HDC 调试端口是不同的连接方式。无线调试端口应以设备当前给出的地址为准，不能将 SSH 端口当作 HDC 端口。
 
-## 实现依据
+### 3. 使用 DevEco 自动生成
 
-- [OpenHarmony AVScreenCaptureRecorder 官方 API](https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/reference/apis-media-kit/arkts-apis-media-AVScreenCaptureRecorder.md)
-- [OpenHarmony 录屏配置官方 API](https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/reference/apis-media-kit/arkts-apis-media-i.md)
-- 本机 SDK 中的 `@ohos.multimedia.media.d.ts`、文件选择器与文件系统类型声明。
+1. 在 DevEco Studio 中打开项目目录，等待工程同步完成。
+2. 进入 **文件 → 项目结构 → 项目 → 签名配置**，选择 `default`。
+3. 勾选 **自动生成签名文件** 和 **使用 HarmonyOS 签名**。
+4. 登录已具备开发者资格的华为账号，选择正确的开发者身份 / Team。
+5. 保持目标设备已连接。DevEco 会生成本地密钥 / CSR，申请调试证书，并生成绑定本项目包名与目标设备的 debug Profile。
+6. 生成成功后，点击 **应用** 或 **确定**，将配置写入本机工程。
+7. 检查本机 `build-profile.json5`：`app.signingConfigs` 中应有 `default` 配置，`app.products` 中的 `default` 产品也应包含 `"signingConfig": "default"`。只生成材料而未绑定产品，会继续产出未签名包。
+8. 运行 `bash scripts/build.sh`，得到 signed HAP。
 
-`tests/recorder.test.cjs` 在 Node 中转译实际业务源码，以模拟媒体与文件系统验证错误处理和事件顺序；这些测试不能替代真实屏幕录制测试。
+DevEco 通常将材料保存在用户目录的 `~/.ohos/config/`，实际路径以签名配置页为准。由 IDE 管理签名密码，不要把真实密码、私钥或完整本机签名配置复制进 README、提交或聊天。
+
+更换设备、修改包名或 Profile 到期后，需要重新生成或更新 Profile，随后重建 signed HAP。
+
+### 4. 需要手动申请时
+
+如果无法使用自动签名，可以在 DevEco 中生成本地密钥库与 CSR，再在华为开发者中心依次完成：
+
+1. 创建包名为 `com.personal.desktoprecorder` 的应用。
+2. 使用 CSR 申请并下载调试证书。
+3. 注册需要调试的设备。
+4. 创建 **debug Profile**，选择此应用、调试证书和目标设备，并下载 `.p7b`。
+5. 回到 DevEco 签名配置页，填写对应密钥库、别名、密码、证书链与 Profile，绑定 `default` 产品后保存并构建。
+
+`.p12`、证书和 Profile 必须来自同一套配置。不要编辑平台签发的 Profile 内容，编辑后其签名会失效。
+
+参考：[官方应用签名指南](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-signing)、[申请调试 Profile](https://developer.huawei.com/consumer/cn/doc/doccenter-getting-started/agc-help-debug-profile-0000002248181278)。
+
+## 本地校验 debug 签名
+
+构建后使用项目提供的校验脚本：
+
+```sh
+python3 scripts/verify-debug-signature.py \
+  --hap entry/build/default/outputs/default/entry-default-signed.hap
+```
+
+同时核对连接设备是否属于该 Profile：
+
+```sh
+python3 scripts/verify-debug-signature.py \
+  --hap entry/build/default/outputs/default/entry-default-signed.hap \
+  --target "$RECORDER_TARGET"
+```
+
+脚本调用 SDK 官方 `hap-sign-tool` 校验 HAP 和 Profile，检查完整性、包名、debug 类型及有效期；传入 `--target` 时还会核对设备绑定。过程文件放在临时目录中并自动清理，不在项目中生成校验报告，也不输出设备标识或密码。
+
+本地密码学校验成功不代表目标系统一定信任这套证书。是否可安装，以设备的安装返回值为准。
+
+## 安装、启动与使用
+
+```sh
+python3 scripts/install-device.py \
+  --target "$RECORDER_TARGET" \
+  --hap entry/build/default/outputs/default/entry-default-signed.hap
+```
+
+也可以使用 HDC：
+
+```sh
+hdc -t "$RECORDER_TARGET" install -r entry/build/default/outputs/default/entry-default-signed.hap
+hdc -t "$RECORDER_TARGET" shell aa start -a EntryAbility -b com.personal.desktoprecorder
+```
+
+打开清录后，选择分辨率和视频码率，点击 **开始录制**，在系统授权弹窗中选择整个屏幕。点击 **停止并保存** 后，可在录制列表播放或导出。重要视频应先导出；卸载应用或清除应用数据会删除应用私有目录中的录制。
+
+常见问题：
+
+| 现象 | 检查方式 |
+| --- | --- |
+| 安装提示 `9568257 / fail to verify pkcs7 file` | 检查是否使用目标设备认可的 HarmonyOS 调试签名，而非任意自签名 / 上游测试证书 |
+| 已生成证书但没有 signed HAP | 保存签名配置，并检查 `default` 产品已绑定同名 signingConfig |
+| 修改包名或换设备后安装失败 | 更新匹配包名与目标设备的 debug Profile |
+| 开始时提示参数无效 | 检查模块是否仍为 `2in1`，码率是否在 1–30 Mbps 内 |
+| 麦克风不可用 | 检查麦克风授权，或关闭麦克风讲解 |
+
+## Git 日常使用
+
+`main` 保存可构建源码，功能或修复使用 `codex/` 前缀分支，通过 Pull Request 合入。
+
+```sh
+git switch main
+git pull --ff-only origin main
+git switch -c codex/your-change
+
+# 修改完成后
+python3 scripts/check-repository.py
+bash scripts/test.sh
+bash scripts/build.sh
+git add <本次修改的源码路径>
+git diff --cached
+git commit -m "feat: describe the change"
+git push -u origin codex/your-change
+gh pr create --base main --fill
+```
+
+仓库忽略本机签名配置、证书私钥、设备资料、录制样本、HAP、构建缓存和生成的测试报告。`scripts/check-repository.py` 检查已跟踪文件，避免将这些本机材料提交。
+
+打包已提交源码：
+
+```sh
+python3 scripts/package-source.py
+```
+
+生成的 ZIP 位于 `artifacts/`，来自当前 Git 提交。未提交修改不会被静默打包；修改源码后应先提交再打包。
+
+## 自动检查与构建
+
+GitHub Actions 包含两个工作流：
+
+- **Source checks**：分支推送、Pull Request 或手动触发时，检查仓库文件并运行自动化测试。使用独立安装的 TypeScript 4.9.5，无需在 Linux runner 安装 DevEco。不生成或上传测试报告文件。
+- **Build unsigned HAP**：手动触发，使用带 `self-hosted / macOS / deveco` 标签且已安装 DevEco SDK 的专用 runner，构建并上传未签名 HAP。未配置 runner 时不要触发此工作流；它不包含或上传个人调试签名材料。
+
+本机可运行 `bash scripts/test.sh`。自动化测试模拟系统依赖，不能替代真实电脑上的系统授权、录屏与播放检查。
+
+## 功能边界
+
+- 通过系统授权录制；隐私窗口、受保护画面与系统禁止采集的音频仍受操作系统限制。
+- 使用系统编码器，帧率由系统管理，不承诺固定 60 fps 或纯 CPU 编码。
+- 支持系统声音采集与麦克风开关，没有独立的系统声音静音开关。
+- 暂不提供暂停、剪辑、多屏拼接或全局快捷键。
+- 正常最小化不会主动停止录制；强制终止或关机可能留下 `.part.mp4`，不能保证一定可修复。
+- 故障诊断只记录调用阶段、配置与错误，不记录画面、声音，不上传。
+
+## 接口资料
+
+- [OpenHarmony AVScreenCaptureRecorder](https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/reference/apis-media-kit/arkts-apis-media-AVScreenCaptureRecorder.md)
+- [OpenHarmony 录屏配置](https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/reference/apis-media-kit/arkts-apis-media-i.md)
