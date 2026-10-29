@@ -206,7 +206,7 @@ python3 scripts/package-source.py
 
 ## 自动检查与构建
 
-鸿蒙应用市场准备见 [官方规则与当前差距](docs/APPGALLERY.md)、[送审资料草稿](docs/MARKET_LISTING.md)及[隐私政策](docs/PRIVACY.md)。`RECORDER_PACKAGE_KIND=app RECORDER_BUILD_MODE=release bash scripts/build.sh` 可生成 APP；正式市场准备使用 `python3 scripts/package-market.py`，从无本机签名的干净源码隔离打包。未签名 APP 仍需要平台认可的正式发布签名、预检和审核，不能使用 debug Profile 冒充。
+鸿蒙应用市场准备见 [官方规则与当前差距](docs/APPGALLERY.md)、[送审资料草稿](docs/MARKET_LISTING.md)、[个人证书额度与多应用复用](docs/PERSONAL_CERTIFICATES.md)及[隐私政策](docs/PRIVACY.md)。`RECORDER_PACKAGE_KIND=app RECORDER_BUILD_MODE=release bash scripts/build.sh` 可生成 APP；正式市场准备使用 `python3 scripts/package-market.py`，从无本机签名的干净源码隔离打包。未签名 APP 仍需要平台认可的正式发布签名、预检和审核，不能使用 debug Profile 冒充。
 
 GitHub Actions 包含三个工作流：
 
