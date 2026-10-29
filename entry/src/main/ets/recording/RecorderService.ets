@@ -54,8 +54,14 @@ export class RecorderService {
   private pending: Promise<void> = Promise.resolve();
   private stage: string = 'idle';
   private validating: boolean = false;
+  private privacyConsent: boolean = false;
 
   initialize(context: common.UIAbilityContext): void { this.context = context; }
+
+  setPrivacyConsent(accepted: boolean): void {
+    if (!accepted && this.snapshot.phase !== 'idle') { throw new Error('请先停止录制再撤回同意'); }
+    this.privacyConsent = accepted;
+  }
 
   observe(listener: ((snapshot: RecorderSnapshot) => void) | undefined): void {
     this.listener = listener;
@@ -74,6 +80,7 @@ export class RecorderService {
 
   start(options: RecordingOptions, validateOnly: boolean = false, configVariant: number = 0): Promise<void> {
     return this.enqueue(async () => {
+      if (!this.privacyConsent) { throw new Error('请先阅读并同意隐私政策'); }
       if (this.snapshot.phase !== 'idle') { return; }
       this.snapshot.phase = 'starting';
       this.snapshot.message = '请在系统弹窗中授权，并选择整个屏幕';
@@ -290,6 +297,11 @@ export class RecorderService {
   }
 
   async files(): Promise<RecordingFile[]> {
+    if (!this.privacyConsent) { throw new Error('请先阅读并同意隐私政策'); }
+    return this.localRecordings();
+  }
+
+  private async localRecordings(): Promise<RecordingFile[]> {
     const directory = this.directory();
     if (!fs.accessSync(directory)) { return []; }
     const names = await fs.listFile(directory);
@@ -305,7 +317,9 @@ export class RecorderService {
   }
 
   async exportFile(recording: RecordingFile): Promise<string> {
+    if (!this.privacyConsent) { throw new Error('请先阅读并同意隐私政策'); }
     if (!this.context) { throw new Error('应用尚未初始化'); }
+    this.checkRecordingPath(recording);
     const savePicker = new picker.DocumentViewPicker(this.context);
     const locations = await savePicker.save({ newFileNames: [recording.name], fileSuffixChoices: ['MP4 视频|.mp4'] });
     if (locations.length === 0) { return ''; }
@@ -316,6 +330,46 @@ export class RecorderService {
       finally { await fs.close(destination); }
     } finally { await fs.close(source); }
     return locations[0];
+  }
+
+  private checkRecordingPath(recording: RecordingFile): void {
+    if (!recording.name.endsWith('.mp4') || /[/\\]/.test(recording.name) ||
+      recording.path !== `${this.directory()}/${recording.name}` || recording.path === this.path) {
+      throw new Error('只能操作应用内已停止录制的视频');
+    }
+  }
+
+  deleteRecording(recording: RecordingFile): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.snapshot.phase !== 'idle') { throw new Error('请先停止录制'); }
+      this.checkRecordingPath(recording);
+      await fs.unlink(recording.path);
+      if (this.snapshot.lastSaved === recording.path) { this.snapshot.lastSaved = ''; }
+    });
+  }
+
+  clearDiagnostics(): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.snapshot.phase !== 'idle') { throw new Error('请先停止录制'); }
+      if (!this.context) { throw new Error('应用尚未初始化'); }
+      const path = `${this.context.filesDir}/recorder-diagnostics.jsonl`;
+      if (fs.accessSync(path)) { await fs.unlink(path); }
+    });
+  }
+
+  clearLocalData(): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.snapshot.phase !== 'idle') { throw new Error('请先停止录制'); }
+      const recordings = await this.localRecordings();
+      for (const recording of recordings) {
+        this.checkRecordingPath(recording);
+        await fs.unlink(recording.path);
+      }
+      if (!this.context) { throw new Error('应用尚未初始化'); }
+      const log = `${this.context.filesDir}/recorder-diagnostics.jsonl`;
+      if (fs.accessSync(log)) { await fs.unlink(log); }
+      this.snapshot.lastSaved = '';
+    });
   }
 
   private describeError(error: BusinessError): string {

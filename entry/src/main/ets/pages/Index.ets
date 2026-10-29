@@ -1,6 +1,9 @@
 import deviceInfo from '@ohos.deviceInfo';
 import fileUri from '@ohos.file.fileuri';
 import { BusinessError } from '@ohos.base';
+import common from '@ohos.app.ability.common';
+import { PrivacySettings } from '../recording/PrivacySettings';
+import { APP_VERSION, DEVELOPER_NAME, PRIVACY_CONTACT, privacyPolicyText } from '../recording/AppMetadata';
 import { RecorderService, RecorderSnapshot, RecordingFile } from '../recording/RecorderService';
 import { durationText, parseBitrateMbps, estimatedMegabytesPerMinute } from '../recording/RecordingPolicy';
 
@@ -24,11 +27,21 @@ struct Index {
   @State private preview: string = '';
   @State private exporting: boolean = false;
   @State private notice: string = '';
+  @State private privacyAccepted: boolean = false;
+  @State private showingPrivacy: boolean = false;
+  @State private privacyReady: boolean = false;
+  private privacySettings: PrivacySettings | undefined = undefined;
   private startedAt: number = 0;
   private ticker: number = -1;
   private readonly service: RecorderService = RecorderService.shared;
 
   aboutToAppear(): void {
+    try {
+      this.privacySettings = new PrivacySettings(this.getUIContext().getHostContext() as common.UIAbilityContext);
+      this.privacyAccepted = this.privacySettings.accepted();
+      this.service.setPrivacyConsent(this.privacyAccepted);
+      this.privacyReady = true;
+    } catch (error) { this.notice = `无法读取本地隐私设置：${(error as BusinessError).message}`; }
     this.service.observe((snapshot: RecorderSnapshot) => {
       this.phase = snapshot.phase;
       this.message = snapshot.message;
@@ -36,14 +49,14 @@ struct Index {
       if (snapshot.width > 0) {
         this.dimensions = `${snapshot.width} × ${snapshot.height} · ${(snapshot.bitrate / 1000000).toFixed(1)} Mbps`;
       }
-      if (this.phase === 'idle') { this.refresh(); }
+      if (this.phase === 'idle' && this.privacyAccepted) { this.refresh(); }
     });
     this.ticker = setInterval(() => {
       if (this.phase === 'recording' && this.startedAt > 0) {
         this.elapsed = durationText(Date.now() - this.startedAt);
       }
     }, 500);
-    this.refresh();
+    if (this.privacyAccepted) { this.refresh(); }
   }
 
   aboutToDisappear(): void {
@@ -52,6 +65,7 @@ struct Index {
   }
 
   onBackPress(): boolean {
+    if (this.showingPrivacy && this.privacyAccepted) { this.showingPrivacy = false; return true; }
     if (this.preview) { this.preview = ''; return true; }
     if (this.phase !== 'idle') {
       this.notice = '录制进行中。请先停止录制，或最小化窗口继续录制。';
@@ -66,6 +80,7 @@ struct Index {
   }
 
   private async record(): Promise<void> {
+    if (!this.privacyAccepted) { this.showingPrivacy = true; return; }
     this.notice = '';
     const videoBitrate = this.bitrateChoice === 0 ? undefined : parseBitrateMbps(this.bitrateText);
     if (this.bitrateChoice !== 0 && videoBitrate === undefined) {
@@ -103,6 +118,106 @@ struct Index {
     } finally { this.exporting = false; }
   }
 
+  private async acceptPrivacy(): Promise<void> {
+    if (!this.privacySettings) { return; }
+    try {
+      await this.privacySettings.save(true);
+      this.service.setPrivacyConsent(true);
+      this.privacyAccepted = true;
+      this.showingPrivacy = false;
+      this.notice = '';
+      await this.refresh();
+    } catch (error) { this.notice = `无法保存同意状态：${(error as BusinessError).message}`; }
+  }
+
+  private async withdrawPrivacy(): Promise<void> {
+    if (!this.privacySettings || this.exporting) { return; }
+    try {
+      const answer = await this.getUIContext().getPromptAction().showDialog({
+        title: '撤回隐私政策同意', message: '将停止当前录制并停用录屏。已有录像仍保存在本机，您可在此页清空，或重新同意后逐条导出、删除。',
+        buttons: [{ text: '取消', color: '#39775B' }, { text: '停止并撤回', color: '#A44437' }]
+      });
+      if (answer.index !== 1) { return; }
+      await this.service.stop();
+      this.service.setPrivacyConsent(false);
+      this.privacyAccepted = false;
+      this.preview = '';
+      this.recordings = [];
+      await this.privacySettings.save(false);
+      this.notice = '已撤回同意，录屏已停用。';
+    } catch (error) { this.notice = (error as BusinessError).message; }
+  }
+
+  private async deleteRecording(recording: RecordingFile): Promise<void> {
+    if (this.phase !== 'idle' || this.exporting) { return; }
+    try {
+      const answer = await this.getUIContext().getPromptAction().showDialog({
+        title: '删除本机录像', message: `删除“${recording.name}”？此操作不可恢复，不会删除已导出的副本。`,
+        buttons: [{ text: '取消', color: '#39775B' }, { text: '删除', color: '#A44437' }]
+      });
+      if (answer.index !== 1) { return; }
+      this.preview = '';
+      await this.service.deleteRecording(recording);
+      await this.refresh();
+      this.notice = '已删除应用内录像。';
+    } catch (error) { this.notice = (error as BusinessError).message; }
+  }
+
+  private async clearLocalData(): Promise<void> {
+    if (this.phase !== 'idle' || this.exporting) { this.notice = '请先停止录制并等待导出完成。'; return; }
+    try {
+      const answer = await this.getUIContext().getPromptAction().showDialog({
+        title: '清空本机录像与诊断', message: '将永久删除应用内全部录像（含未完成文件）和本地诊断日志，不影响已导出的副本。建议先导出重要录像。',
+        buttons: [{ text: '取消', color: '#39775B' }, { text: '清空', color: '#A44437' }]
+      });
+      if (answer.index !== 1) { return; }
+      this.preview = '';
+      await this.service.clearLocalData();
+      this.recordings = [];
+      this.notice = '已清理本机录像及诊断日志。';
+    } catch (error) { this.notice = (error as BusinessError).message; }
+  }
+
+  private async clearDiagnostics(): Promise<void> {
+    try { await this.service.clearDiagnostics(); this.notice = '本地诊断日志已清除。'; }
+    catch (error) { this.notice = (error as BusinessError).message; }
+  }
+
+  private exitApplication(): void {
+    (this.getUIContext().getHostContext() as common.UIAbilityContext).terminateSelf().catch(() => {
+      this.notice = '可关闭窗口退出应用。';
+    });
+  }
+
+  @Builder
+  privacyPanel() {
+    Scroll() {
+      Column({ space: 20 }) {
+        Text('隐私与关于').fontSize(26).fontWeight(FontWeight.Bold).fontColor('#15392F')
+        Text(`清录 ${APP_VERSION} · ${DEVELOPER_NAME}`).fontSize(14).fontColor('#52735C')
+        Text(privacyPolicyText()).fontSize(14).lineHeight(25).fontColor('#344D3E').width('100%')
+          .copyOption(CopyOptions.LocalDevice)
+        if (PRIVACY_CONTACT) {
+          Text(`客服与隐私联系：${PRIVACY_CONTACT}`).fontSize(14).fontColor('#39775B')
+            .copyOption(CopyOptions.LocalDevice)
+        }
+        if (this.notice) { Text(this.notice).fontSize(14).fontColor('#A44437') }
+        if (this.privacyAccepted) {
+          Button('返回录屏').onClick(() => { this.showingPrivacy = false; })
+          Button('撤回同意并停止录屏').enabled(!this.exporting).onClick(() => { this.withdrawPrivacy(); })
+        } else {
+          Text('请阅读后自主选择。不同意时不会开始录制或申请麦克风权限。').fontSize(13).fontColor('#52735C')
+          Button('同意并继续').enabled(this.privacyReady).onClick(() => { this.acceptPrivacy(); })
+          Button('不同意，退出').onClick(() => { this.exitApplication(); })
+        }
+        Button('清除诊断日志').enabled(this.phase === 'idle' && !this.exporting)
+          .onClick(() => { this.clearDiagnostics(); })
+        Button('清空本机录像与诊断').fontColor('#A44437').enabled(this.phase === 'idle' && !this.exporting)
+          .onClick(() => { this.clearLocalData(); })
+      }.width('100%').constraintSize({ maxWidth: 900 }).padding(32).alignItems(HorizontalAlign.Start)
+    }.width('100%').height('100%').backgroundColor('#F4F6F0').align(Alignment.Top)
+  }
+
   @Builder
   qualityChoice(label: string, detail: string, edge: number) {
     Column({ space: 8 }) {
@@ -137,10 +252,16 @@ struct Index {
       Button('导出').fontSize(13).fontColor('#FFFFFF').backgroundColor('#39775B')
         .enabled(!this.exporting && this.phase === 'idle')
         .onClick(() => { this.exportRecording(recording); })
+      Button('删除').fontSize(13).fontColor('#A44437').backgroundColor('#FFF0E9')
+        .enabled(!this.exporting && this.phase === 'idle')
+        .onClick(() => { this.deleteRecording(recording); })
     }.padding({ top: 14, bottom: 14 }).width('100%')
   }
 
   build() {
+    if (this.showingPrivacy || !this.privacyAccepted) {
+      this.privacyPanel()
+    } else {
     Scroll() {
       Column({ space: 26 }) {
         Row() {
@@ -152,8 +273,8 @@ struct Index {
             }.alignItems(HorizontalAlign.Start)
           }
           Blank()
-          Text('OpenHarmony').fontSize(12).fontColor('#64806E')
-            .padding({ left: 14, right: 14, top: 7, bottom: 7 }).backgroundColor('#E7EEE6').borderRadius(20)
+          Button('隐私与关于').fontSize(12).fontColor('#64806E').backgroundColor('#E7EEE6')
+            .onClick(() => { this.showingPrivacy = true; })
         }.width('100%')
 
         Column({ space: 10 }) {
@@ -185,6 +306,8 @@ struct Index {
               .height(48).width(212).backgroundColor('#F28E7C').fontColor('#243A2D')
               .enabled(this.phase === 'recording').onClick(() => { this.stop(); })
           }
+          Text('经系统授权录制屏幕及系统允许的播放声音；麦克风默认关闭。')
+            .fontSize(12).fontColor('#B6CABA').textAlign(TextAlign.Center)
           Text(this.message).fontSize(12).fontColor('#B6CABA').textAlign(TextAlign.Center)
         }.padding(28).width('100%').borderRadius(22).backgroundColor('#15392F')
 
@@ -299,5 +422,6 @@ struct Index {
           .fontSize(11).fontColor('#8B9786').textAlign(TextAlign.Center).lineHeight(19).width('100%')
       }.width('100%').constraintSize({ maxWidth: 960 }).padding(32)
     }.width('100%').height('100%').backgroundColor('#F4F6F0').align(Alignment.Top)
+    }
   }
 }

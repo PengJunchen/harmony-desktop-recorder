@@ -9,6 +9,7 @@ artifacts/
 *.p7b
 *.cer
 *.csr
+*.app
 /build-profile.json5
 .idea/
 .DS_Store

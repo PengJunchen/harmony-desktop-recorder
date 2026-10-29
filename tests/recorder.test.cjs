@@ -16,6 +16,7 @@ function load(name, mocks = {}) {
     module, exports: module.exports, canIUse: () => true,
     require: id => {
       if (id === './RecordingPolicy') return load('RecordingPolicy.ts');
+      if (id === './AppMetadata') return load('AppMetadata.ts');
       if (id in mocks) return mocks[id];
       throw new Error(`Unexpected dependency ${id}`);
     }
@@ -125,6 +126,7 @@ function fixture(options = {}) {
     '@ohos.abilityAccessCtrl': { createAtManager: () => ({ requestPermissionsFromUser: async () => ({ authResults: [options.permissionDenied ? -1 : 0] }) }) }
   }).RecorderService.shared;
   service.initialize({ filesDir: '/files' });
+  service.setPrivacyConsent(options.privacyAccepted !== false);
   let snapshot;
   service.observe(value => { snapshot = { ...value }; });
   return { service, events, disk, descriptors, handlers, get snapshot() { return snapshot; }, get config() { return configured; } };
@@ -287,4 +289,65 @@ test('invalid direct bitrate cannot reach native initialization', async () => {
   assert.equal(f.snapshot.phase, 'idle');
   assert.equal(f.events.includes('init'), false);
   assert.equal(f.descriptors.size, 0);
+});
+
+test('without privacy consent no file, microphone or native capture can be started', async () => {
+  const f = fixture({ privacyAccepted: false });
+  await assert.rejects(f.service.start({ ...settings, microphone: true }), /隐私政策/);
+  await assert.rejects(f.service.files(), /隐私政策/);
+  assert.equal(f.events.length, 0);
+  assert.equal(f.disk.size, 0);
+  f.service.setPrivacyConsent(true);
+  await f.service.start(settings);
+  assert.equal(f.snapshot.phase, 'recording');
+  assert.throws(() => f.service.setPrivacyConsent(false), /停止录制/);
+  await f.service.stop();
+  f.service.setPrivacyConsent(false);
+  await assert.rejects(f.service.start(settings), /隐私政策/);
+});
+
+test('deletion cannot target another sandbox file or a live recording', async () => {
+  const f = fixture();
+  await assert.rejects(f.service.deleteRecording({ name: '../secret.mp4', path: '/files/recordings/../secret.mp4' }), /只能操作/);
+  await f.service.start(settings);
+  await assert.rejects(f.service.clearLocalData(), /停止录制/);
+  assert.equal(f.snapshot.phase, 'recording');
+  await f.service.stop();
+  const video = (await f.service.files())[0];
+  await f.service.deleteRecording(video);
+  assert.equal((await f.service.files()).length, 0);
+});
+
+test('after withdrawal local data can be erased without consenting again', async () => {
+  const f = fixture();
+  await f.service.start(settings);
+  await f.service.stop();
+  f.disk.set('/files/recorder-diagnostics.jsonl', 10);
+  f.disk.set('/files/unrelated.txt', 20);
+  f.service.setPrivacyConsent(false);
+  await f.service.clearLocalData();
+  assert.equal([...f.disk.keys()].some(p => p.endsWith('.mp4')), false);
+  assert.equal(f.disk.has('/files/recorder-diagnostics.jsonl'), false);
+  assert.equal(f.disk.has('/files/unrelated.txt'), true);
+  await assert.rejects(f.service.start(settings), /隐私政策/);
+});
+
+test('privacy consent is versioned and withdrawal is persisted', async () => {
+  let saved = '2025-01-01';
+  let flushCount = 0;
+  const { PrivacySettings } = load('PrivacySettings.ets', {
+    '@ohos.data.preferences': { getPreferencesSync: () => ({
+      getSync: () => saved,
+      putSync: (_key, value) => { saved = value; },
+      flush: async () => { flushCount++; }
+    }) }
+  });
+  const privacy = new PrivacySettings({});
+  assert.equal(privacy.accepted(), false);
+  await privacy.save(true);
+  assert.equal(privacy.accepted(), true);
+  assert.ok(saved.length > 0);
+  await privacy.save(false);
+  assert.equal(privacy.accepted(), false);
+  assert.equal(flushCount, 2);
 });

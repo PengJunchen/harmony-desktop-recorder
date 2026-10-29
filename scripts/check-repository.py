@@ -12,7 +12,7 @@ for name in names:
     path = Path(name)
     lowered = name.lower()
     if (name in {'build-profile.json5', 'local.properties'} or
-        path.suffix.lower() in {'.p12', '.p7b', '.csr', '.cer', '.log', '.mp4', '.hap'} or
+        path.suffix.lower() in {'.p12', '.p7b', '.csr', '.cer', '.log', '.mp4', '.hap', '.app'} or
         any(part in {'.device', 'artifacts', '.idea', '.hvigor', 'reports', 'test-results', 'coverage'} for part in path.parts) or
         path.name.upper() in {'VALIDATION.MD', 'VERIFICATION.MD'} or
         path.name.upper().startswith('TEST_REPORT')):
