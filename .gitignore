@@ -1,0 +1,15 @@
+.hvigor/
+oh_modules/
+node_modules/
+**/build/
+local.properties
+artifacts/
+.device/
+*.p12
+*.p7b
+*.cer
+/build-profile.json5
+.idea/
+.DS_Store
+__pycache__/
+*.pyc

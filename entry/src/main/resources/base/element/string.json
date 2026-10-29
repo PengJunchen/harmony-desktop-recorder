@@ -1,0 +1,4 @@
+{ "string": [
+  { "name": "app_description", "value": "高清桌面录屏" },
+  { "name": "microphone_reason", "value": "为桌面录屏添加麦克风讲解声音" }
+] }

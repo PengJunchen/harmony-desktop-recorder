@@ -1,0 +1,6 @@
+{
+  "source": "https://raw.githubusercontent.com/openharmony/developtools_hapsigner/master/dist/OpenHarmonyApplication.pem",
+  "sha256": "b5c1d6254faa91eab645a32fc3ce136128c94d88a739a0e956e6a49b331387e5",
+  "license": "Apache-2.0",
+  "purpose": "Public OpenHarmony test certificate chain; no private key"
+}
