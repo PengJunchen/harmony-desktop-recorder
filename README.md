@@ -9,7 +9,7 @@
 
 ## 下载与安装
 
-前往 [GitHub Releases](https://github.com/PengJunchen/harmony-desktop-recorder/releases) 下载预览版。发布附件包含 **release 模式的未签名 HAP**、同版本源码、SHA-256 校验值及离线安装指南。仓库目前为私有，需要有仓库访问权限。
+前往 [GitHub Releases](https://github.com/PengJunchen/harmony-desktop-recorder/releases) 直接下载预览版。公开仓库与发布附件均可浏览、下载。发布附件包含 **release 模式的未签名 HAP**、同版本源码、SHA-256 校验值及离线安装指南。
 
 请按 [安装指南](docs/INSTALL.md) 先校验、再使用自己的有效调试签名安装；推荐使用源码与 DevEco 自动签名。未签名 HAP 不能直接双击安装，个人设备 signed HAP 不作为通用下载包。发布约定与维护者命令见 [打包细则](docs/RELEASING.md)。此方式参考 ClashBox 的 unsigned HAP 分发，实际签名和安装以华为官方流程为准。
 

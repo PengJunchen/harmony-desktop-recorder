@@ -67,4 +67,4 @@ gh release create v0.1.2 --verify-tag --prerelease \
 - `Build unsigned HAP`：手动在带 `self-hosted / macOS / deveco` 标签的 runner 上运行，调用同一本地打包脚本，上传完整的五项发布附件。
 - `Publish preview release`：在已有版本标签上手动运行；同样先隔离构建，再由 GitHub 托管 runner 使用本仓库的临时 `GITHUB_TOKEN` 创建 prerelease。仅发布步骤具备 `contents: write`，无需上传个人签名或 PAT。
 
-后两个工作流需要已安装相同 DevEco / SDK 的专用 macOS runner。当前未提供 runner 的自动注册或远端执行能力，未配置时不能声称云端构建可用。不要在不受信任的 PR 上运行带本机开发者环境的 runner。Release 权限与仓库可见性保持一致；私有仓库的附件仅对获授权用户可见。
+后两个工作流需要已安装相同 DevEco / SDK 的专用 macOS runner。当前未提供 runner 的自动注册或远端执行能力，未配置时不能声称云端构建可用。不要在不受信任的 PR 上运行带本机开发者环境的 runner。当前仓库及 Release 附件均为公开分发；上传前必须检查附件中没有个人签名材料、设备信息或密钥。

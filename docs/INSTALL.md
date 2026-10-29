@@ -4,7 +4,7 @@
 
 ## 1. 下载什么
 
-从 [GitHub Releases](https://github.com/PengJunchen/harmony-desktop-recorder/releases) 下载同一版本的文件。仓库目前为私有，下载需要有仓库访问权限的 GitHub 账号。
+从 [GitHub Releases](https://github.com/PengJunchen/harmony-desktop-recorder/releases) 直接下载同一版本的文件。仓库和发布附件现已公开，无需申请仓库访问权限。0.1.2 源码 ZIP / 离线指南中的旧私有权限说明已过时，以本在线指南为准。
 
 | 文件 | 用途 |
 | --- | --- |
