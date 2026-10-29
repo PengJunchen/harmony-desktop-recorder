@@ -62,9 +62,11 @@ jobs:
         run: |
           python3 - <<'PY'
           import hashlib, json, os, pathlib, subprocess
-          directory = pathlib.Path('release-assets')
+          version = json.loads(pathlib.Path('AppScope/app.json5').read_text())['app']['versionName']
+          directory = pathlib.Path('release-assets') / f'release-{version}'
           release = json.loads((directory / 'release-manifest.json').read_text())
-          version = release['version']
+          if release['version'] != version:
+              raise SystemExit('Application version mismatch.')
           expected = {f'Qinglu-{version}-2in1-api24-unsigned.hap', f'Qinglu-{version}-source.zip',
                       'INSTALL.md', 'release-manifest.json', 'SHA256SUMS'}
           if {p.name for p in directory.iterdir()} != expected:
