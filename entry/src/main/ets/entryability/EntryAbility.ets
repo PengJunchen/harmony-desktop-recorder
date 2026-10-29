@@ -6,10 +6,13 @@ import { RecorderService } from '../recording/RecorderService';
 export default class EntryAbility extends UIAbility {
   private validateConfig: boolean = false;
   private configVariant: number = 0;
+  private videoBitrate: number | undefined = undefined;
 
   onCreate(want: Want): void {
     this.validateConfig = want.parameters?.qingluValidateConfig === true;
     this.configVariant = (want.parameters?.qingluConfigVariant as number) || 0;
+    const requested = want.parameters?.qingluVideoBitrate;
+    this.videoBitrate = typeof requested === 'number' ? requested : undefined;
   }
 
   onWindowStageCreate(stage: window.WindowStage): void {
@@ -21,13 +24,16 @@ export default class EntryAbility extends UIAbility {
   onNewWant(want: Want): void {
     if (want.parameters?.qingluValidateConfig === true) {
       this.configVariant = (want.parameters?.qingluConfigVariant as number) || 0;
+      const requested = want.parameters?.qingluVideoBitrate;
+      this.videoBitrate = typeof requested === 'number' ? requested : undefined;
       this.checkConfiguration();
     }
   }
 
   private checkConfiguration(): void {
     // Configuration validation opens no screen picker and never starts capture.
-    RecorderService.shared.start({ longEdge: 0, highQuality: true, microphone: false }, true, this.configVariant).catch(() => {});
+    RecorderService.shared.start({ longEdge: 0, highQuality: true, microphone: false,
+      videoBitrate: this.videoBitrate }, true, this.configVariant).catch(() => {});
   }
 
   onDestroy(): void {

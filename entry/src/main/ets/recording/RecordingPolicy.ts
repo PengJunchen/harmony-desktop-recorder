@@ -5,7 +5,8 @@ export interface CaptureSize {
 }
 
 // Fit inside the selected long edge; never upscale or distort a desktop.
-export function captureSize(width: number, height: number, longEdge: number, highQuality: boolean): CaptureSize {
+export function captureSize(width: number, height: number, longEdge: number, highQuality: boolean,
+  requestedBitrate?: number): CaptureSize {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) {
     throw new Error('无法获取有效的屏幕尺寸');
   }
@@ -13,10 +14,26 @@ export function captureSize(width: number, height: number, longEdge: number, hig
   const outputWidth = Math.max(2, Math.floor(width * scale / 2) * 2);
   const outputHeight = Math.max(2, Math.floor(height * scale / 2) * 2);
   const pixels = outputWidth * outputHeight;
-  // API 24 device rejects values above 30 Mbps during AVScreenCaptureRecorder.init.
+  if (requestedBitrate !== undefined && (!Number.isInteger(requestedBitrate) ||
+    requestedBitrate < 1000000 || requestedBitrate > 30000000)) {
+    throw new Error('视频码率需要在 1–30 Mbps 之间');
+  }
+  // Bound automatic values to the highest bitrate validated on the API 24 device.
   const bitrateLimit = highQuality ? 30000000 : 20000000;
-  const bitrate = Math.round(Math.max(8000000, Math.min(bitrateLimit, pixels * (highQuality ? 9 : 6))));
+  const bitrate = requestedBitrate !== undefined ? requestedBitrate :
+    Math.round(Math.max(8000000, Math.min(bitrateLimit, pixels * (highQuality ? 9 : 6))));
   return { width: outputWidth, height: outputHeight, bitrate: bitrate };
+}
+
+export function parseBitrateMbps(text: string): number | undefined {
+  const input = text.trim();
+  if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(input)) { return undefined; }
+  const value = Math.round(Number(input) * 1000000);
+  return value >= 1000000 && value <= 30000000 ? value : undefined;
+}
+
+export function estimatedMegabytesPerMinute(videoBitrate: number): number {
+  return (videoBitrate + 192000) * 60 / 8 / 1000000;
 }
 
 export function isTerminalCaptureState(code: number): boolean {

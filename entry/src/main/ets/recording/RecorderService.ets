@@ -12,6 +12,7 @@ export interface RecordingOptions {
   longEdge: number;
   highQuality: boolean;
   microphone: boolean;
+  videoBitrate?: number;
 }
 
 export interface RecordingFile {
@@ -100,7 +101,7 @@ export class RecorderService {
         const defaultScreen = display.getDefaultDisplaySync();
         const screen = deviceInfo.sdkApiVersion >= 14 ? display.getPrimaryDisplaySync() : defaultScreen;
         this.trace('displaySource', 0, `default=${defaultScreen.width}x${defaultScreen.height}; primary=${screen.width}x${screen.height}; variant=${configVariant}`);
-        const size = captureSize(screen.width, screen.height, options.longEdge, options.highQuality);
+        const size = captureSize(screen.width, screen.height, options.longEdge, options.highQuality, options.videoBitrate);
         this.trace('display', 0, `${screen.width}x${screen.height}; output=${size.width}x${size.height}; bitrate=${size.bitrate}; displayId=${screen.id}`);
         this.snapshot.width = size.width;
         this.snapshot.height = size.height;

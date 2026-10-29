@@ -248,3 +248,43 @@ test('native initialization error retains its stage and code and returns to idle
   assert.equal(f.events.includes('release'), true);
   assert.equal(f.descriptors.size, 0);
 });
+
+test('custom bitrate reduces the encoding target without changing resolution or aspect ratio', () => {
+  const automatic = policy.captureSize(3120, 2080, 2560, true);
+  const compressed = policy.captureSize(3120, 2080, 2560, true, 2000000);
+  assert.equal(compressed.width, automatic.width);
+  assert.equal(compressed.height, automatic.height);
+  assert.equal(compressed.bitrate, 2000000);
+  assert.ok(compressed.bitrate < automatic.bitrate);
+});
+test('Mbps input accepts decimal user values and rejects ambiguous or unsupported values', () => {
+  for (const [text, expected] of [['1', 1000000], ['2.5', 2500000], [' 4 ', 4000000],
+    ['12.34', 12340000], ['30', 30000000]]) {
+    assert.equal(policy.parseBitrateMbps(text), expected);
+  }
+  for (const text of ['', '0', '0.99', '30.01', '31', '-2', '2.', '2 Mbps', '1e1', 'NaN', '2.123']) {
+    assert.equal(policy.parseBitrateMbps(text), undefined);
+  }
+  for (const bitrate of [0, 999999, 30000001, NaN, Infinity, 1500000.5]) {
+    assert.throws(() => policy.captureSize(1920, 1080, 1920, true, bitrate));
+  }
+});
+test('file-size reference includes the audio track and decreases with the selected bitrate', () => {
+  assert.equal(policy.estimatedMegabytesPerMinute(4000000), 31.44);
+  assert.ok(policy.estimatedMegabytesPerMinute(2000000) < policy.estimatedMegabytesPerMinute(4000000));
+});
+test('selected bitrate reaches the native recorder unchanged', async () => {
+  const f = fixture();
+  await f.service.start({ ...settings, videoBitrate: 2500000 });
+  assert.equal(f.config.videoBitrate, 2500000);
+  assert.equal(f.config.frameWidth, 1920);
+  assert.equal(f.config.frameHeight, 1080);
+  await f.service.stop();
+});
+test('invalid direct bitrate cannot reach native initialization', async () => {
+  const f = fixture();
+  await f.service.start({ ...settings, videoBitrate: 500000 });
+  assert.equal(f.snapshot.phase, 'idle');
+  assert.equal(f.events.includes('init'), false);
+  assert.equal(f.descriptors.size, 0);
+});

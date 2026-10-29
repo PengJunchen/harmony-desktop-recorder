@@ -2,7 +2,11 @@ import deviceInfo from '@ohos.deviceInfo';
 import fileUri from '@ohos.file.fileuri';
 import { BusinessError } from '@ohos.base';
 import { RecorderService, RecorderSnapshot, RecordingFile } from '../recording/RecorderService';
-import { durationText } from '../recording/RecordingPolicy';
+import { durationText, parseBitrateMbps, estimatedMegabytesPerMinute } from '../recording/RecordingPolicy';
+
+const BITRATE_VALUES: number[] = [0, 2, 4, 8, 12, 20, 30];
+const BITRATE_LABELS: string[] = ['自动匹配', '2 Mbps · 省空间', '4 Mbps · 均衡', '8 Mbps · 清晰',
+  '12 Mbps · 精细', '20 Mbps · 高画质', '30 Mbps · 最高码率', '自定义'];
 
 @Entry
 @Component
@@ -13,6 +17,8 @@ struct Index {
   @State private dimensions: string = '跟随主屏幕比例';
   @State private longEdge: number = 0;
   @State private highQuality: boolean = true;
+  @State private bitrateChoice: number = 0;
+  @State private bitrateText: string = '4';
   @State private microphone: boolean = false;
   @State private recordings: RecordingFile[] = [];
   @State private preview: string = '';
@@ -61,11 +67,23 @@ struct Index {
 
   private async record(): Promise<void> {
     this.notice = '';
+    const videoBitrate = this.bitrateChoice === 0 ? undefined : parseBitrateMbps(this.bitrateText);
+    if (this.bitrateChoice !== 0 && videoBitrate === undefined) {
+      this.notice = '请输入 1–30 Mbps 的视频码率，最多两位小数。';
+      return;
+    }
     this.preview = '';
     this.elapsed = '00:00:00';
     try {
-      await this.service.start({ longEdge: this.longEdge, highQuality: this.highQuality, microphone: this.microphone });
+      await this.service.start({ longEdge: this.longEdge, highQuality: this.highQuality,
+        microphone: this.microphone, videoBitrate: videoBitrate });
     } catch (error) { this.notice = (error as BusinessError).message; }
+  }
+
+  private bitrateEstimate(): string {
+    const bitrate = parseBitrateMbps(this.bitrateText);
+    return bitrate === undefined ? '输入有效码率后显示体积参考' :
+      `参考体积约 ${estimatedMegabytesPerMinute(bitrate).toFixed(1)} MB / 分钟`;
   }
 
   private async stop(): Promise<void> {
@@ -160,6 +178,7 @@ struct Index {
           Text(this.dimensions).fontSize(13).fontColor('#ADC7B5')
           if (this.phase === 'idle') {
             Button('●   开始录制').height(48).width(212).backgroundColor('#D6EFCC').fontColor('#15392F')
+              .enabled(this.bitrateChoice === 0 || parseBitrateMbps(this.bitrateText) !== undefined)
               .fontWeight(FontWeight.Medium).onClick(() => { this.record(); })
           } else {
             Button(this.phase === 'stopping' ? '正在保存…' : this.phase === 'starting' ? '等待授权…' : '■   停止并保存')
@@ -182,12 +201,53 @@ struct Index {
           }.width('100%')
           Row({ space: 16 }) {
             Column({ space: 4 }) {
-              Text('高码率画质').fontSize(14).fontColor('#344D3E')
-              Text('更清晰的文字与细节，占用更多空间').fontSize(12).fontColor('#839080')
+              Text('视频码率').fontSize(14).fontColor('#344D3E')
+              Text('分辨率保持不变，也能选择更小的视频体积').fontSize(12).fontColor('#839080')
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-            Toggle({ type: ToggleType.Switch, isOn: this.highQuality }).selectedColor('#39775B')
-              .enabled(this.phase === 'idle').onChange((value: boolean) => { this.highQuality = value; })
+            Select([{ value: BITRATE_LABELS[0] }, { value: BITRATE_LABELS[1] },
+              { value: BITRATE_LABELS[2] }, { value: BITRATE_LABELS[3] },
+              { value: BITRATE_LABELS[4] }, { value: BITRATE_LABELS[5] },
+              { value: BITRATE_LABELS[6] }, { value: BITRATE_LABELS[7] }])
+              .selected(this.bitrateChoice).value(BITRATE_LABELS[this.bitrateChoice])
+              .font({ size: 13 }).fontColor('#344D3E').enabled(this.phase === 'idle')
+              .onSelect((index: number) => {
+                this.bitrateChoice = index;
+                if (index > 0 && index < BITRATE_VALUES.length) {
+                  this.bitrateText = BITRATE_VALUES[index].toString();
+                }
+              })
           }.width('100%')
+          if (this.bitrateChoice === 0) {
+            Row({ space: 16 }) {
+              Column({ space: 4 }) {
+                Text('自动匹配高画质').fontSize(14).fontColor('#344D3E')
+                Text('根据分辨率匹配码率，开启后保留更多细节').fontSize(12).fontColor('#839080')
+              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+              Toggle({ type: ToggleType.Switch, isOn: this.highQuality }).selectedColor('#39775B')
+                .enabled(this.phase === 'idle').onChange((value: boolean) => { this.highQuality = value; })
+            }.width('100%')
+          } else {
+            Column({ space: 10 }) {
+              Row({ space: 12 }) {
+                Slider({ value: (parseBitrateMbps(this.bitrateText) || 4000000) / 1000000,
+                  min: 1, max: 30, step: 0.5 }).layoutWeight(1).selectedColor('#39775B')
+                  .enabled(this.phase === 'idle').showTips(true)
+                  .onChange((value: number) => { this.bitrateChoice = 7; this.bitrateText = value.toString(); })
+                TextInput({ text: this.bitrateText, placeholder: '1–30' }).width(86).height(38)
+                  .type(InputType.Normal).maxLength(5).textAlign(TextAlign.Center)
+                  .enabled(this.phase === 'idle')
+                  .onChange((value: string) => { this.bitrateChoice = 7; this.bitrateText = value; })
+                Text('Mbps').fontSize(12).fontColor('#778277')
+              }.width('100%')
+              if (parseBitrateMbps(this.bitrateText) === undefined) {
+                Text('请输入 1–30 Mbps，最多两位小数。').fontSize(12).fontColor('#A8443D')
+              } else {
+                Text(this.bitrateEstimate()).fontSize(12).fontColor('#39775B')
+              }
+              Text('码率越低，文件通常越小，运动画面和文字细节也可能下降。实际体积随画面内容变化。')
+                .fontSize(12).fontColor('#839080')
+            }.width('100%').alignItems(HorizontalAlign.Start)
+          }
           Divider().color('#EBEEE6')
           Row({ space: 16 }) {
             Column({ space: 4 }) {
