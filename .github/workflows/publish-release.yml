@@ -1,0 +1,89 @@
+name: Publish preview release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag, for example v0.1.2
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: [self-hosted, macOS, deveco]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Validate existing tag and build assets
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          tag = os.environ['RELEASE_TAG']
+          version = json.load(open('AppScope/app.json5'))['app']['versionName']
+          if not re.fullmatch(r'v\d+\.\d+\.\d+', tag) or tag != 'v' + version:
+              raise SystemExit('Tag must match the application version.')
+          subprocess.run(['git', 'show-ref', '--verify', 'refs/tags/' + tag], check=True)
+          PY
+          python3 scripts/package-release.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: preview-release
+          path: artifacts/release-*/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: preview-release
+          path: release-assets
+      - name: Validate assets and publish once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          directory = pathlib.Path('release-assets')
+          release = json.loads((directory / 'release-manifest.json').read_text())
+          version = release['version']
+          expected = {f'Qinglu-{version}-2in1-api24-unsigned.hap', f'Qinglu-{version}-source.zip',
+                      'INSTALL.md', 'release-manifest.json', 'SHA256SUMS'}
+          if {p.name for p in directory.iterdir()} != expected:
+              raise SystemExit('Unexpected release attachments.')
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if release['sourceCommit'] != head or release['tag'] != os.environ['RELEASE_TAG'] or release['signed']:
+              raise SystemExit('Release metadata mismatch.')
+          entries = (directory / 'SHA256SUMS').read_text().splitlines()
+          if len(entries) != 4:
+              raise SystemExit('Invalid checksum count.')
+          checked = set()
+          for line in entries:
+              digest, name = line.split('  ', 1)
+              if name not in expected - {'SHA256SUMS'} or name in checked:
+                  raise SystemExit('Invalid checksum filename.')
+              checked.add(name)
+              if hashlib.sha256((directory / name).read_bytes()).hexdigest() != digest:
+                  raise SystemExit('Attachment checksum mismatch.')
+          subprocess.run(['gh', 'release', 'create', os.environ['RELEASE_TAG'], '--verify-tag', '--prerelease',
+                          '--title', f'清录 {version} · 鸿蒙电脑预览版', '--notes-file',
+                          f'docs/releases/v{version}.md', *map(str, sorted(directory.iterdir()))], check=True)
+          PY

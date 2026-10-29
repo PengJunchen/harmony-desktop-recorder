@@ -7,6 +7,12 @@
 - 目标设备：`2in1` 电脑，API 24 / `6.1.1(24)` 及以上
 - 输出格式：MP4，H.264 视频与 AAC 音频
 
+## 下载与安装
+
+前往 [GitHub Releases](https://github.com/PengJunchen/harmony-desktop-recorder/releases) 下载预览版。发布附件包含 **release 模式的未签名 HAP**、同版本源码、SHA-256 校验值及离线安装指南。仓库目前为私有，需要有仓库访问权限。
+
+请按 [安装指南](docs/INSTALL.md) 先校验、再使用自己的有效调试签名安装；推荐使用源码与 DevEco 自动签名。未签名 HAP 不能直接双击安装，个人设备 signed HAP 不作为通用下载包。发布约定与维护者命令见 [打包细则](docs/RELEASING.md)。此方式参考 ClashBox 的 unsigned HAP 分发，实际签名和安装以华为官方流程为准。
+
 ## 功能
 
 - 整屏录制；可选原分辨率、长边最高 2560 或 1920，保持原比例，不放大原画面。
@@ -106,7 +112,7 @@ DevEco 通常将材料保存在用户目录的 `~/.ohos/config/`，实际路径�
 
 ### 4. 需要手动申请时
 
-如果无法使用自动签名，可以在 DevEco 中生成本地密钥库与 CSR，再在华为开发者中心依次完成：
+如果无法使用自动签名，且你拥有该包名的应用管理权限，可以在 DevEco 中生成本地密钥库与 CSR，再在华为开发者中心依次完成以下步骤。普通下载用户优先使用自动签名，不应尝试以维护者身份创建或发布同包名应用：
 
 1. 创建包名为 `com.personal.desktoprecorder` 的应用。
 2. 使用 CSR 申请并下载调试证书。
@@ -198,10 +204,11 @@ python3 scripts/package-source.py
 
 ## 自动检查与构建
 
-GitHub Actions 包含两个工作流：
+GitHub Actions 包含三个工作流：
 
 - **Source checks**：分支推送、Pull Request 或手动触发时，检查仓库文件并运行自动化测试。使用独立安装的 TypeScript 4.9.5，无需在 Linux runner 安装 DevEco。不生成或上传测试报告文件。
-- **Build unsigned HAP**：手动触发，使用带 `self-hosted / macOS / deveco` 标签且已安装 DevEco SDK 的专用 runner，构建并上传未签名 HAP。未配置 runner 时不要触发此工作流；它不包含或上传个人调试签名材料。
+- **Build unsigned HAP**：手动触发，使用带 `self-hosted / macOS / deveco` 标签且已安装 DevEco SDK 的专用 runner，隔离构建 release 模式未签名 HAP，并上传完整发布附件。
+- **Publish preview release**：在现有版本标签上手动运行，隔离构建后创建 GitHub prerelease。只在发布步骤授予 `contents: write`。这两个构建工作流需要先配置上述 runner；它们不包含或上传个人调试签名材料。细节见 [打包细则](docs/RELEASING.md)。
 
 本机可运行 `bash scripts/test.sh`。自动化测试模拟系统依赖，不能替代真实电脑上的系统授权、录屏与播放检查。
 
