@@ -26,6 +26,18 @@
 
 码率越低，文件通常越小，也可能损失运动画面与文字细节。例如，4 Mbps 的体积参考约 31.4 MB/分钟，2 Mbps 约 16.4 MB/分钟，已计入当前音轨码率，未计入容器开销。实际体积随画面内容变化，静止画面可能明显小于参考值。录制期间设置锁定，新设置从下一次录制开始生效。
 
+## 应用截图
+
+以下为 0.2.0 在 API 24 鸿蒙电脑上的真实界面。商店素材均为 2560×1440 PNG，仅裁去应用窗口外围桌面，没有改绘界面或展示私人视频内容。
+
+![整屏录制与分辨率设置](docs/assets/store-0.2.0/01-main.png)
+
+![独立码率、体积预估和本机录像管理](docs/assets/store-0.2.0/02-bitrate-size.png)
+
+![隐私与关于](docs/assets/store-0.2.0/04-privacy.png)
+
+对外隐私政策使用 [独立隐私页面](https://pengjunchen.github.io/harmony-desktop-recorder/privacy/)，内容与应用内政策及 [Markdown 原文](docs/PRIVACY.md) 一致。
+
 ## 开发环境
 
 本项目当前采用：
