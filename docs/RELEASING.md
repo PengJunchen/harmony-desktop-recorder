@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | GitHub 开发预览版 | 干净源码、release 模式、未签名 | GitHub Release，用户自行签名 |
 | 本机真机调试 | debug 或 release 模式、本人设备有效的 debug Profile | 本机 HDC / DevEco 安装，signed HAP 不上传 |
-| 应用市场正式发行 | 按当前华为发布流程使用发布身份、对应 Profile 与 APP 打包流程 | AppGallery Connect 审核分发，另行准备 |
+| 应用市场正式发行 | 使用本人正式发布证书、应用专用发布 Profile 与 release 模式 APP | 华为开发者中心检测、审核、市场分发 |
 
 `.hap` 是应用模块包，`.app` 是应用发布包。不能将 HAP 改扩展名当作 APP；GitHub 上创建 Release 也不等于取得华为发布签名。参见 [华为发布应用](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-publish-app) 和 [签名指南](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-signing)。
 
@@ -60,6 +60,24 @@ gh release create v0.1.2 --verify-tag --prerelease \
 ```
 
 创建后读取 Release 的 tag、附件名称 / 大小，重新下载附件核对 SHA-256。更新说明可以修改，已发布版本的源码标签与二进制不要静默替换；代码修复应提升版本发布。
+
+## 应用市场 APP
+
+GitHub 预览版与应用市场使用各自的分发包。市场包先从已提交的源码隔离构建：
+
+```sh
+python3 scripts/package-market.py
+```
+
+正式签名需要开发者中心签发的发布证书，以及属于该 APP ID / 包名、分发用途为应用市场的发布 Profile。私钥、密钥库密码和 Profile 保留在本机受控位置；不要把真实签名配置提交进 Git 或上传到 GitHub Actions。密钥库密码不要直接写在终端命令参数中。
+
+本项目使用传统本地签名时，证书链应按叶证书到根证书排列；按 SDK 的 `hap-sign-tool` 说明签署真实的 APP ZIP，再用 `verify-app` 及 `verify-profile` 核验签名、证书匹配、包名、版本、发布用途与设备范围。不要把修改扩展名、调试签名或者仅有本地验签当作市场可发布证明。
+
+2026-10-30 在本人后台实际验证的上传路径是：清录 → 分发 → 应用信息 → 下一步 → 版本信息 → 发布版本“去选择” → “上传新版本”。页面支持 4 GB 以内的 APP；上传后等待解析，并核对平台识别的版本名 / 版本号、合法性结果。然后启动“上架自检”，选中该包并“确认选取”，完成其余发布资料和审核步骤。该限制和界面可能变化，以当前后台为准。
+
+签名 APP 供华为后台使用，不放入公开 GitHub 预览版附件。市场展示图标应与安装包一致；本次后台接受 216×216 或 1024×1024、3 MB 以内的 PNG，实际使用源 SVG 导出的 1024×1024 PNG。截图使用目标电脑上的真实界面，避免包含本人桌面文件、账号、私人录像或他人信息。
+
+上传成功、合法性达标、上架自检通过、提交审核、审核通过及正式上架是分别确认的状态。保留源码版本和包摘要，按 [市场提交材料](MARKET_LISTING.md) 记录当前进度；未经后台回读，不把后续状态写成已经完成。
 
 ## GitHub Actions
 
