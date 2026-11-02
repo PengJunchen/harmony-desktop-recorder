@@ -1,4 +1,4 @@
-export const APP_VERSION: string = '0.2.0';
+export const APP_VERSION: string = '0.2.1';
 export const PRIVACY_VERSION: string = '2026-10-29';
 export const DEVELOPER_NAME: string = '清和晨曦';
 export const PRIVACY_CONTACT: string = 'pengjunchen_s@163.com';
